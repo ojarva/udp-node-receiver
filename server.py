@@ -1,9 +1,10 @@
+import datetime
+import json
+import Queue
+import re
 import redis
 import socket
-import Queue
 import threading
-import datetime
-import re
 import time
 
 UDP_IP = "0.0.0.0"
@@ -60,12 +61,14 @@ class StatsReceiver(object):
                 value = splitted_data[1].strip()
                 key = ".".join(splitted_key[1:])
                 item_type = "generic"
+                fields = {}
                 if self.TEMPERATURE_RE.match(key):
                     value = float(value) / 100
                     item_type = "temperature"
                 elif self.PIR_RE.match(key):
                     value = value == "1"
                     item_type = "pir"
+                fields[item_type] = value
 
                 output = {
                     "time": datetime.datetime.utcnow().isoformat() + "Z",
@@ -73,9 +76,7 @@ class StatsReceiver(object):
                     "tags": {
                         "key": key,
                     },
-                    "fields": {
-                        "value": value
-                    }
+                    "fields": fields,
                 }
                 if node_name not in self.node_value_sets:
                     self.node_value_sets[node_name] = {}
