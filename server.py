@@ -14,9 +14,9 @@ UDP_PORT = 8225
 class StatsReceiver(object):
     TEMPERATURE_RE = re.compile(r"^.*-t\d$")
     POWER_READING_RE = re.compile(r"^E\d+")
-    PIR_RE = re.compile("^.*pir$")
-    SWITCH_RE = re.compile("^.*-sw$");
-    PM_RE = re.compile("^.*pm\d+$")
+    PIR_RE = re.compile(r"^.*pir$")
+    SWITCH_RE = re.compile(r"^.*-sw$")
+    PM_RE = re.compile(r"^.*pm\d+$")
 
     def __init__(self):
         self.sock = socket.socket(socket.AF_INET,  # Internet
@@ -30,7 +30,6 @@ class StatsReceiver(object):
         self.node_value_sets = {}
 
     def send_timer(self):
-        last_sent_at = time.time()
         while True:
             if not self.running:
                 return
@@ -42,7 +41,7 @@ class StatsReceiver(object):
                 except Queue.Empty:
                     break
             if len(items) > 0:
-                print "Sending", items
+                print("Sending", items)
                 self.redis.publish("influx-update-pubsub", json.dumps(items))
 
     def process(self, node_name, key, value):
@@ -52,7 +51,7 @@ class StatsReceiver(object):
                     value = float(value) / 100
                     item_type = "temperature"
                     if value < -70 or value == 127:
-                        print "Invalid value for temperature: %s degC, key: %s" % (value, key)
+                        print(f"Invalid value for temperature: {value} degC, key: {key}")
                         return
                 elif self.PIR_RE.match(key):
                     value = value == "1"
@@ -61,7 +60,7 @@ class StatsReceiver(object):
                     value = float(value) * 230
                     item_type = "watts"
                     if value < 0 or value > 5000:
-                        print "Invalid value for power consumption: %s W, key %s" % (value, key)
+                        print(f"Invalid value for power consumption: {value} W, key {key}")
                 elif node_name == "tea" and key == "nfc-id":
                     item_type = "tea-reader"
                 elif self.SWITCH_RE.match(key):
@@ -87,8 +86,8 @@ class StatsReceiver(object):
                 if node_name not in self.node_value_sets:
                     self.node_value_sets[node_name] = {}
                 self.node_value_sets[node_name][key] = value
-                self.redis.publish("watchdog-input", json.dumps({"name": "node-%s" % node_name, "values": self.node_value_sets[node_name]}))
-                self.redis.publish("node-%s-pubsub" % node_name, json.dumps({"name": "node-%s" % node_name, "key": key, "value": value, "item_type": item_type}))
+                self.redis.publish("watchdog-input", json.dumps({"name": f"node-{node_name}", "values": self.node_value_sets[node_name]}))
+                self.redis.publish(f"node-{node_name}-pubsub", json.dumps({"name": f"node-{node_name}", "key": key, "value": value, "item_type": item_type}))
                 if item_type == "pir" or item_type == "switch":
                     if value:
                         self.redis.publish("lightcontrol-triggers-pubsub", json.dumps({"key": node_name, "trigger": item_type}))
@@ -112,13 +111,13 @@ class StatsReceiver(object):
                 data, addr = self.sock.recvfrom(1024)  # buffer size is 1024 bytes
                 splitted_data = data.split(":")
                 if len(splitted_data) != 2:
-                    print "Malformed data from {sender}: {data}".format(sender=addr, data=data)
+                    print(f"Malformed data from {addr}: {data}")
                     continue
                 key = splitted_data[0]
                 splitted_key = key.split(".")
                 node_name = splitted_key[0]
                 if len(splitted_key) < 2:
-                    print "Malformed key from {sender}: {data}".format(sender=addr, data=data)
+                    print(f"Malformed key from {addr}: {data}")
                     continue
                 value = splitted_data[1].strip()
                 if "|" in value:
